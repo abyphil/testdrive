@@ -1,0 +1,3 @@
+* README
+
+Place to keep my notes while checking out any software. 
