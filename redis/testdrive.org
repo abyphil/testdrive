@@ -1,0 +1,318 @@
+
+* Reference
+- [[https://www.docker.com/blog/how-to-use-the-redis-docker-official-image/][how-to-use-the-redis-docker-official-image]] 
+
+* Setup
+
+#+begin_src
+// pull docker image
+docker pull redis
+
+// 
+docker network create some-network
+docker run --name some-redis -d redis
+docker exec -it some-redis redis-cli
+
+
+127.0.0.1:6379> ping
+PONG
+
+// to exit cli
+quit 
+
+// help menu
+help
+
+#+end_src
+** get, set, integer operations
+#+begin_src
+// get and set or mset (multiple values)
+127.0.0.1:6379> mset 1 one 2 two
+OK
+127.0.0.1:6379> get 1
+"one"
+127.0.0.1:6379> del 1
+(integer) 1
+
+// increment and decrement
+127.0.0.1:6379> set count 5
+OK
+127.0.0.1:6379> incr count
+(integer) 6
+127.0.0.1:6379> decr count
+(integer) 5
+
+#+end_src
+** Transactions
+#+begin_src
+
+// transactions (multi)
+// all operations are queued and are all executed together or none at all
+
+127.0.0.1:6379> multi
+OK
+127.0.0.1:6379(TX)> set count 4
+QUEUED
+127.0.0.1:6379(TX)> incr count
+QUEUED
+127.0.0.1:6379(TX)> exec
+1) OK
+2) (integer) 5
+
+#+end_src
+** Hash (Dictionary)
+#+begin_src
+
+// hash - collection of key-value pairs
+//- hmset - set multiple keys
+//- hvals - show all keys
+//- hset - set a key-val in hash
+//- hdel - delete a key
+//- hget - get value for a key
+
+127.0.0.1:6379> hmset number:keys 1 one 2 two
+OK
+127.0.0.1:6379> hvals number:keys
+1) "one"
+2) "two"
+127.0.0.1:6379> hset number:keys 3 three
+(integer) 1
+127.0.0.1:6379> hdel number:keys 3
+(integer) 1
+127.0.0.1:6379> hget number:keys 1
+"one"
+
+#+end_src
+
+** List
+#+begin_src
+
+// list - but has index too. 
+// rpush - push to right of list
+// lrange - list range
+// lrem - remove element at index
+// lpop - pop off the left of the list
+
+127.0.0.1:6379> rpush numbers one two three
+(integer) 3
+127.0.0.1:6379> lrange numbers 0 -1
+1) "one"
+2) "two"
+3) "three"
+127.0.0.1:6379> lrem numbers 0 one
+(integer) 1
+127.0.0.1:6379> lpop numbers 
+"two"
+127.0.0.1:6379> lrange numbers 0 -1
+1) "three"
+
+// concurrent changes in a list is not allowed. To remove from one list and add to another use rpoplpush
+
+127.0.0.1:6379> rpoplpush numbers newnumbers
+"three"
+127.0.0.1:6379> lrange numbers 0 -1
+(empty array)
+127.0.0.1:6379> lrange newnumbers 0 -1
+1) "three"
+#+end_src
+** Blocking queue
+#+begin_src
+// blocking queue - to block listening to a queue
+
+// create a blocking queue with a timeout of 300s - console 1
+aby@p52:/media/data/docs$ docker exec -it some-redis redis-cli
+127.0.0.1:6379> brpop comments 300
+
+// add comments to the blocking queue - console 2
+127.0.0.1:6379> lpush comments "hello world"
+(integer) 1
+
+// see the comments getting popped - console 1
+127.0.0.1:6379> brpop comments 300
+1) "comments"
+2) "hello world"
+(26.73s)
+#+end_src
+** Set
+- no LPOP, RPUSH etc and similar positional commands (since set is unordered)
+- no blocking commands either
+#+begin_src
+// sadd - add members to set
+// smembers - list of members in a set
+// sinter - intersection of sets
+// sunion - union of sets
+// sunionstore - store the union of two sets to another
+// sdiffstore - store the difference
+
+127.0.0.1:6379> sadd oddnums one three five seven
+(integer) 4
+127.0.0.1:6379> sadd triples three six
+(integer) 2
+127.0.0.1:6379> sdiff oddnums triples
+1) "one"
+2) "five"
+3) "seven"
+127.0.0.1:6379> sinter oddnums triples
+1) "three"
+127.0.0.1:6379> sunionstore uni oddnums triples
+(integer) 5
+#+end_src
+
+** Sorted set
+- impose an order on a set, based on some score e.g. number of visits, year of birth
+- the key can be incremented / decremented too
+- show a range of elements based on the score (optionally with score)
+#+begin_src
+127.0.0.1:6379> zadd visits 101 goog 103 yhoo
+(integer) 2
+127.0.0.1:6379> zincrby visits 10 goog
+"111"
+127.0.0.1:6379> zrange visits 0 -1
+1) "yhoo"
+2) "goog"
+127.0.0.1:6379> zrangebyscore visits 100 110
+1) "yhoo"
+#+end_src
+
+** Expiry
+- set EXPIRY for a key
+- avoid expiry using PERSIST
+- use single command SETEX to set value and expiry
+- to simulate LRU cache, update the expiry time when accessing a key
+- find time to live using TTL   
+#+begin_src
+// expire in 10 seconds
+127.0.0.1:6379> setex ephemeral 10 'value' 
+OK
+127.0.0.1:6379> ttl ephemeral
+(integer) -2
+127.0.0.1:6379> get ephemeral
+(nil)  
+#+end_src
+
+** Database namespaces
+Use separate namespaces to separate the variables used. Namespaces are numbered and default namespace is 0.
+#+begin_src
+127.0.0.1:6379> set greet 'hello'
+OK
+127.0.0.1:6379> get greet 
+"hello"
+
+// move 'greet' to namespace 1
+127.0.0.1:6379> move greet 1
+(integer) 1
+127.0.0.1:6379> select 1
+OK
+127.0.0.1:6379[1]> get greet
+"hello"  
+#+end_src
+
+** streaming commands using telnet
+- Connect to redis server using a telnet connection.
+- pipeline commands to the server and receive the response in the output stream
+#+begin_src
+// send ECHO command in 1 second intervals to localhost:port
+$ (echo​​ ​​-en​​ ​​"ECHO hello\r\n"​​;​​ ​​sleep​​ ​​1)​​ ​​|​​ ​​nc​​ ​​localhost​​ ​​6379  
+#+end_src
+
+** publish subscribe
+- publish or subscribe to a queue
+#+begin_src
+// console 1
+127.0.0.1:6379> publish comments "one"
+(integer) 0
+127.0.0.1:6379> publish comments "two"
+(integer) 1
+
+//console 2
+127.0.0.1:6379> subscribe comments
+1) "subscribe"
+2) "comments"
+3) (integer) 1
+1) "message"
+2) "comments"
+3) "two"
+1) "message"
+2) "comments"
+3) "two"
+#+end_src
+
+** Server info using INFO command
+- The command gives details on server, clients, database keyspaces, statistics, memory etc.
+#+begin_src
+127.0.0.1:6379> info
+# Server
+redis_version:7.2.0
+redis_git_sha1:00000000
+redis_git_dirty:0
+redis_build_id:7f39debc4ae51812
+redis_mode:standalone
+os:Linux 5.15.0-79-generic x86_64
+...  
+#+end_src
+
+** Redis configuration
+Typically available under //etc/redis/redis.conf/. Some important configurations
+- daemonize - run as a daemon or not
+- port - port listened by server (default 6379)
+- database - number of database namespaces (default 16)
+
+** Durability
+- redis has 3 options for durability
+- [1] No persistence - values are kept only in memory
+- [2] Force save - use SAVE or BGSAVE
+#+begin_src
+// force save
+127.0.0.1:6379> save
+OK
+// last saved time
+127.0.0.1:6379> lastsave
+(integer) 1693386498
+
+127.0.0.1:6379> bgsave
+Background saving started
+#+end_src
+
+** Snapshotting
+Third option of saving is snapshots. The settings are done in /redis.conf/
+#+begin_src
+
+save 900 1
+// save in 300 seconds, if 10 keys change
+save 300 10
+​save 60 10000  
+#+end_src
+** Append only file
+The snapshotting is /eventually durable/. If the server crashes, some data might be lost. To avoid this, enable /appendonly/ option. 
+#+begin_src
+// redis.conf
+appendonly  yes
+appendfsync always
+#+end_src
+
+This creates a write-ahead log, so that all actions are saved. Instead or /always/ another option is /everysec/.
+** Security
+Relevant configuration and commands are
+- requirepass -
+- AUTH
+- FLUSHALL
+** Tweaking parameters
+Use redis-benchmark tool to send a variety of commands to the server to benchmark it. Use this, while tuning parameters to gauge the progress.
+#+begin_src
+$ ​​redis-benchmark​​ ​​-n​​ ​​100000​
+​====== PING (inline) ======
+​  100000 requests completed in 0.89 seconds
+..
+#+end_src
+** Master slave replication
+To create a slave instance
+- copy redis.conf
+- make the following changes
+#+begin_src
+	port 6380
+​ 	slaveof 127.0.0.1 6379  
+#+end_src
+- start both instances
+- you can see data gets replicated on both
+
+  
