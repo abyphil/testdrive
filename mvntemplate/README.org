@@ -1,0 +1,24 @@
+* README
+
+This is a template maven project to get started.
+
+Special changes to note
+- .mvn/local-settings.xml contains setting to point to common local repository.
+  #+begin_src code
+    <localRepository>/media/backup/repository</localRepository>
+  #+end_src
+- pom.xml has the project name, parent and artifactIds configured
+  #+begin_src code
+  <groupId>com.tnkr</groupId>
+  <artifactId>mvntemplate</artifactId>
+  <version>1.0-SNAPSHOT</version>
+
+  <name>mvntemplate</name>
+  #+end_src
+- the project will run AS IS. After running the following commands, the project can be imported as a maven project in eclipse.
+    #+begin_src code
+      mvn clean package
+      mvn clean eclipse:eclipse
+      mvn eclipse:eclipse
+    #+end_src
+  
